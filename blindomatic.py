@@ -28,7 +28,18 @@ blindStateFile = "currentBlindState.txt"
 closedState = "CLOSED"
 openState = "OPEN"
 
+def setupGPIO():
+  GPIO.setmode(GPIO.BCM)
+
+  GPIO.setup(PHOTO_INPUT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+  GPIO.setup(IN1_APLUS, GPIO.OUT)
+  GPIO.setup(IN2_AMINUS, GPIO.OUT)
+  GPIO.setup(IN3_BPLUS, GPIO.OUT)
+  GPIO.setup(IN4_BMINUS, GPIO.OUT)  
+
 def clockwiseTurn(numberOfTurns):  
+  setupGPIO()
   for iteration in range(0, numberOfTurns):
     for x in range( step_count):
       GPIO.output(IN1_APLUS, GPIO.LOW)
@@ -55,8 +66,10 @@ def clockwiseTurn(numberOfTurns):
   GPIO.output(IN2_AMINUS, GPIO.LOW)
   GPIO.output(IN3_BPLUS, GPIO.LOW)
   GPIO.output(IN4_BMINUS, GPIO.LOW)
+  sleep(STEP_DELAY)
 
 def counterClockwiseTurn(numberOfTurns):  
+  setupGPIO()
   for iteration in range(0, numberOfTurns):
     for x in range( step_count):
       GPIO.output(IN1_APLUS, GPIO.HIGH)
@@ -83,6 +96,7 @@ def counterClockwiseTurn(numberOfTurns):
   GPIO.output(IN2_AMINUS, GPIO.LOW)
   GPIO.output(IN3_BPLUS, GPIO.LOW)
   GPIO.output(IN4_BMINUS, GPIO.LOW)
+  sleep(STEP_DELAY)
 
 def openBlinds():
   filePtr = open( blindStateFile, "r")
@@ -131,16 +145,10 @@ def main(argv):
       filePtr.close()
       sys.exit()
 
-  GPIO.setmode(GPIO.BCM)
-
-  GPIO.setup(PHOTO_INPUT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-  GPIO.setup(IN1_APLUS, GPIO.OUT)
-  GPIO.setup(IN2_AMINUS, GPIO.OUT)
-  GPIO.setup(IN3_BPLUS, GPIO.OUT)
-  GPIO.setup(IN4_BMINUS, GPIO.OUT)  
   if (desiredAction in ['auto','AUTO','automatic', 'AUTOMATIC']):
     print"Running in automatic mode using photo sensor as control"
     lightCount = darkCount = 0
+    setupGPIO()
 
     # Do an initial reading to start with.
     lightData=GPIO.input(PHOTO_INPUT)
