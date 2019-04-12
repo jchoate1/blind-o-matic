@@ -2,7 +2,7 @@
 
 from time import sleep
 import RPi.GPIO as GPIO
-import sys, getopt
+import sys, os, getopt
 import datetime
 import pdb
 
@@ -25,6 +25,7 @@ READ_SENSOR_SECONDS = 3
 SMOOTHING_LEVEL = 5
 
 blindStateFile = "currentBlindState.txt"
+logFileName = "blindomatic.log"
 closedState = "CLOSED"
 openState = "OPEN"
 
@@ -102,29 +103,29 @@ def openBlinds():
   filePtr = open( blindStateFile, "r")
   currentState = filePtr.read().strip()
   filePtr.close()
-#  print("Current State is: %s, Closed state is %s\n" % (currentState, openState))
   if (currentState == closedState):
+    logFilePtr = open( logFileName, 'a' )
+    logFilePtr.write("Opening the blinds at %s\n" % datetime.datetime.now() )
+    logFilePtr.close
     print ("Opening the blinds at: %s" % datetime.datetime.now())
     clockwiseTurn(ROTATIONS_PER_CYCLE)
   filePtr = open( blindStateFile, "w")
   filePtr.write( openState + "\n")
   filePtr.close()
 
-  #clockwiseTurn(ROTATIONS_PER_CYCLE)
-      
 def closeBlinds():
   filePtr = open( blindStateFile, "r")
   currentState = filePtr.read().strip()
   filePtr.close()
-#  print("Current State is: %s, Closed state is %s\n" % (currentState, closedState))
   if (currentState == openState):
+    logFilePtr = open( logFileName, 'a' )
+    logFilePtr.write("Closing the blinds at %s\n" % datetime.datetime.now() )
+    logFilePtr.close
     print ("Closing the blinds at: %s" % datetime.datetime.now())
     counterClockwiseTurn(ROTATIONS_PER_CYCLE)
   filePtr = open( blindStateFile, "w")
   filePtr.write( closedState + "\n")
   filePtr.close()
-
-  #counterClockwiseTurn(ROTATIONS_PER_CYCLE)
 
 def main(argv):
   desiredAction=''
@@ -149,7 +150,12 @@ def main(argv):
     print"Running in automatic mode using photo sensor as control"
     lightCount = darkCount = 0
     setupGPIO()
-
+    appendWrite = 'a' if os.path.exists( logFileName ) else 'w'
+    logFilePtr = open( logFileName, appendWrite )
+    logFilePtr.write("%s started at %s\n" % (sys.argv[0],
+                                             datetime.datetime.now() ) )
+    logFilePtr.close
+                     
     # Do an initial reading to start with.
     lightData=GPIO.input(PHOTO_INPUT)
     if lightData:
@@ -162,6 +168,9 @@ def main(argv):
     try:
       while True:
         lightData=GPIO.input(PHOTO_INPUT)
+        # Prevent overflow
+        lightCount = 1 if (lightCount == sys.maxint) else lightCount 
+        darkCount = 1 if (darkCount == sys.maxint) else darkCount 
         if lightData:
           if darkCount > 0:
             lightCount = darkCount = 0
@@ -184,30 +193,6 @@ def main(argv):
     except:
       GPIO.cleanup() # ensures a clean exit
       sys.exit(2)
-
-      # try:
-      #   lightData=GPIO.input(PHOTO_INPUT)
-      #   if lightData:
-      #     if darkCount > 0:
-      #       darkCount = 0
-      #       lightCount = 0
-      #     lightCount += 1
-      #     if lightCount >= 3:
-      #       print ("Opening blinds at: %s" % datetime.datetime.now())
-      #       openBlinds()
-      #   else:
-      #     if lightCount > 0:
-      #       lightCount = 0
-      #       darkCount = 0
-      #     darkCount += 1
-      #     if darkCount >= 3:
-      #       print ("Closing blinds at: %s" % datetime.datetime.now())
-      #       closeBlinds()
-      # except (KeyboardInterrupt, SystemExit):
-      #   raise
-      # except:
-      #   GPIO.cleanup() # ensures a clean exit
-      #   sys.exit(2)
       
   if (desiredAction in ['open','OPEN','opened', 'OPENED']):
     openBlinds()
