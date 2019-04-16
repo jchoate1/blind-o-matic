@@ -99,33 +99,48 @@ def counterClockwiseTurn(numberOfTurns):
   GPIO.output(IN4_BMINUS, GPIO.LOW)
   sleep(STEP_DELAY)
 
-def openBlinds():
-  filePtr = open( blindStateFile, "r")
+def getBlindState( stateFileName ):
+  if not os.path.exists( stateFileName ):
+    print "There is no state file, so I don't know the current"
+    print "state of the blinds.  Please set the current state and"
+    print "try again. Set the state by using -s <STATE> (see help"
+    print "for details."
+    sys.exit(2)
+  filePtr = open( stateFileName, "r")
   currentState = filePtr.read().strip()
   filePtr.close()
-  if (currentState == closedState):
-    logFilePtr = open( logFileName, 'a' )
-    logFilePtr.write("Opening the blinds at %s\n" % datetime.datetime.now() )
-    logFilePtr.close
-    print ("Opening the blinds at: %s" % datetime.datetime.now())
-    clockwiseTurn(ROTATIONS_PER_CYCLE)
-  filePtr = open( blindStateFile, "w")
-  filePtr.write( openState + "\n")
+  return currentState
+
+def setBlindState( stateFileName, state ):
+  filePtr = open( stateFileName, "w")
+  filePtr.write( state + "\n")
   filePtr.close()
 
-def closeBlinds():
-  filePtr = open( blindStateFile, "r")
-  currentState = filePtr.read().strip()
-  filePtr.close()
-  if (currentState == openState):
-    logFilePtr = open( logFileName, 'a' )
-    logFilePtr.write("Closing the blinds at %s\n" % datetime.datetime.now() )
+def logMsg( logFile, logMessage ):
+    logFilePtr = open( logFile, 'a' )
+    logLine =  str(datetime.datetime.now()) + ' : ' + logMessage + '\n' 
+    logFilePtr.write( logLine )
     logFilePtr.close
-    print ("Closing the blinds at: %s" % datetime.datetime.now())
+  
+def openBlinds():
+  if (getBlindState(blindStateFile) == closedState):
+    logMessage = "Opening the blinds"
+    print logMessage + ' at ' + str(datetime.datetime.now())
+    logMsg( logFileName, logMessage )
+    clockwiseTurn(ROTATIONS_PER_CYCLE)
+    setBlindState( blindStateFile, openState )
+    return True
+  return False
+
+def closeBlinds():
+  if (getBlindState(blindStateFile) == openState):
+    logMessage = "Closing the blinds"
+    print logMessage + ' at ' + str(datetime.datetime.now())
+    logMsg( logFileName, logMessage )
     counterClockwiseTurn(ROTATIONS_PER_CYCLE)
-  filePtr = open( blindStateFile, "w")
-  filePtr.write( closedState + "\n")
-  filePtr.close()
+    setBlindState( blindStateFile, closedState )
+    return True
+  return False
 
 def main(argv):
   desiredAction=''
@@ -146,14 +161,17 @@ def main(argv):
       filePtr.close()
       sys.exit()
 
+  # Make sure we have the current state of blinds before we do something.
+  initialState = getBlindState(blindStateFile)
+  
   if (desiredAction in ['auto','AUTO','automatic', 'AUTOMATIC']):
     print"Running in automatic mode using photo sensor as control"
     lightCount = darkCount = 0
     setupGPIO()
     appendWrite = 'a' if os.path.exists( logFileName ) else 'w'
     logFilePtr = open( logFileName, appendWrite )
-    logFilePtr.write("%s started at %s\n" % (sys.argv[0],
-                                             datetime.datetime.now() ) )
+    logFilePtr.write("%s : %s started\n" % ( str(datetime.datetime.now()),
+                                                   sys.argv[0] ) )
     logFilePtr.close
                      
     # Do an initial reading to start with.
@@ -164,7 +182,7 @@ def main(argv):
     else:
       print("Sensor detected initial state of blinds is CLOSED.")
       closeBlinds()
-      
+
     try:
       while True:
         lightData=GPIO.input(PHOTO_INPUT)
@@ -176,21 +194,26 @@ def main(argv):
             lightCount = darkCount = 0
           lightCount += 1
           if lightCount >= SMOOTHING_LEVEL:
-            openBlinds()
-            # Wait for 5 minutes here before moving on
-            # after a state change
-            sleep( 300 )
+            if openBlinds():
+              # Wait for 5 minutes here before moving on
+              # after a state change
+              logMsg( logFileName, "Sleeping for 5 mins." )
+              sleep( 300 )
+              logMsg( logFileName, "Resuming operation after sleep." )
         else:
           if lightCount > 0:
             lightCount = darkCount = 0
           darkCount += 1
           if darkCount >= SMOOTHING_LEVEL:
-            closeBlinds()
-            # Wait for 5 minutes here before moving on
-            # after a state change
-            sleep( 300 )
+            if closeBlinds():
+              # Wait for 5 minutes here before moving on
+              # after a state change
+              logMsg( logFileName, "Sleeping for 5 mins." )
+              sleep( 300 )
+              logMsg( logFileName, "Resuming operation after sleep." )
         sleep( READ_SENSOR_SECONDS )
     except:
+      logMsg( logFileName, "Exiting system" )
       GPIO.cleanup() # ensures a clean exit
       sys.exit(2)
       
