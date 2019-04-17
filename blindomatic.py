@@ -16,8 +16,6 @@ SMOOTHING_LEVEL = 5
 PHOTO_INPUT = 4
 
 def main(argv):
-  GPIO.setmode(GPIO.BCM)
-  GPIO.setup(PHOTO_INPUT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
   desiredAction=''
   try:
     opts, args = getopt.getopt(argv,"hsa",["action=","state="])
@@ -32,13 +30,20 @@ def main(argv):
       desiredAction = arg
     elif opt in ("-s", "--state"):
       filePtr = open( ctrl.blindStateFile, "w")
-      filePtr.write( arg + "\n")
+      if (arg in ['OPEN', 'open', 'OPENED', 'opened']):
+          filePtr.write( ctrl.openState + "\n")
+      elif (arg in ['CLOSE', 'close', 'CLOSED', 'closed']):
+          filePtr.write( ctrl.closedState + "\n")
+      else:
+          filePtr.write( ctrl.unknownState + "\n")
       filePtr.close()
       sys.exit()
 
   # Make sure we have the current state of blinds before we do something.
   initialState = ctrl.getBlindState(ctrl.blindStateFile)
   if (desiredAction in ['auto','AUTO','automatic', 'AUTOMATIC']):
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(PHOTO_INPUT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     print"Running in automatic mode using photo sensor as control"
     logMessage = ("%s started\n" % ( sys.argv[0] ) )
     ctrl.logMsg( ctrl.logFileName, logMessage )

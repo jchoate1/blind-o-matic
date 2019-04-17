@@ -20,6 +20,7 @@ blindStateFile = "currentBlindState.txt"
 logFileName = "blindomatic.log"
 closedState = "CLOSED"
 openState = "OPEN"
+unknownState = "UNKNOWN"
 
 def setupGPIO():
   GPIO.setmode(GPIO.BCM)
@@ -95,10 +96,19 @@ def getBlindState( stateFileName ):
     print "state of the blinds.  Please set the current state and"
     print "try again. Set the state by using -s <STATE> (see help"
     print "for details."
+    logMsg( logFileName, "No/missing state file - cannot continue." )
     sys.exit(2)
   filePtr = open( stateFileName, "r")
   currentState = filePtr.read().strip()
   filePtr.close()
+  if currentState == unknownState:
+    print "I don't know the current state of the blinds."
+    print "This could lead to potential damage of the blinds"
+    print "or the driver system.  Therefore we cannot continue."
+    print "Please set the current state and try again."
+    print "Set the state by using -s <STATE> (see help for details.)"
+    logMsg( logFileName, "Unknown current blind state" )
+    sys.exit(2)
   return currentState
 
 def setBlindState( stateFileName, state ):
