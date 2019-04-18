@@ -43,7 +43,7 @@ def evaluateLightLevel( period=OBSERVE_PERIOD ):
   # Values between 0.5 to 1.5 are too close to call, return unknown state
   logMessage = ( "light: %d dark: %d, Ratio was %f" %
                  (lightCount, darkCount, ratio))
-  Ctrl.Logmsg(ctrl.logFileName, logMessage)
+  ctrl.logMsg(ctrl.logFileName, logMessage)
   if ratio <= 0.5:
     return ctrl.openState
   if ratio >= 1.5:
@@ -80,7 +80,7 @@ def main(argv):
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(PHOTO_INPUT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     print"Running in automatic mode using photo sensor as control"
-    logMessage = ("%s started\n" % ( sys.argv[0] ) )
+    logMessage = ("%s started" % ( sys.argv[0] ) )
     ctrl.logMsg( ctrl.logFileName, logMessage )
                      
     lightCount = darkCount = 0
@@ -146,6 +146,3 @@ def main(argv):
 
 if __name__ == "__main__":
   main(sys.argv[1:])
-
-
-
