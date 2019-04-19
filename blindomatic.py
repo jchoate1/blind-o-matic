@@ -14,6 +14,10 @@ OBSERVE_PERIOD = 300
 # Adding hysteresis - must get this many consistent readings
 # in a row before an action is taken
 SMOOTHING_LEVEL = 5
+# Time at night (hour) to put system to deep sleep for the night
+BEDTIME_HOUR = 21
+# Number of seconds in 10 hours used to put system to deep sleep.
+TEN_HOURS_IN_SECS = 3600
 
 PHOTO_INPUT = 4
 def evaluateLightLevel( period=OBSERVE_PERIOD ):
@@ -49,6 +53,12 @@ def evaluateLightLevel( period=OBSERVE_PERIOD ):
   if ratio >= 1.5:
     return ctrl.closedState
   return ctrl.unknownState
+
+def deepSleep( interval=TEN_HOURS_IN_SECS ):
+  logMessage = "Going to sleep for the night. See you in the morning!"
+  ctrl.logMsg( ctrl.logFileName, logMessage )
+  sleep( interval )
+  ctrl.logMsg( ctrl.logFileName, "Waking up and resuming operation." )
 
 def main(argv):
   desiredAction=''
@@ -86,13 +96,13 @@ def main(argv):
     lightCount = darkCount = 0
     ctrl.setupGPIO()
 
-    # Do an initial reading to start with.
+    # Do an initial reading to start with. A sigle reading is good for this
     lightData=GPIO.input(PHOTO_INPUT)
     if lightData:
-      print("Sensor detected initial state of blinds is OPEN.")
+      print("Sensor detected initial state of blinds should be OPEN.")
       ctrl.openBlinds()
     else:
-      print("Sensor detected initial state of blinds is CLOSED.")
+      print("Sensor detected initial state of blinds should be CLOSED.")
       ctrl.closeBlinds()
 
     try:
@@ -105,33 +115,13 @@ def main(argv):
         elif decision == ctrl.unknownState:
           ctrl.logMsg( ctrl.logFileName, "Unknown blind state. Doing nothing" )
 
-        # lightData=GPIO.input(PHOTO_INPUT)
-        # # Prevent overflow
-        # lightCount = 1 if (lightCount == sys.maxint) else lightCount 
-        # darkCount = 1 if (darkCount == sys.maxint) else darkCount 
-        # if lightData:
-        #   if darkCount > 0:
-        #     lightCount = darkCount = 0
-        #   lightCount += 1
-        #   if lightCount >= SMOOTHING_LEVEL:
-        #     if ctrl.openBlinds():
-        #       # Wait for 5 minutes here before moving on
-        #       # after a state change
-        #       ctrl.logMsg( ctrl.logFileName, "Sleeping for 5 mins." )
-        #       sleep( 300 )
-        #       ctrl.logMsg( ctrl.logFileName, "Resuming operation." )
-        # else:
-        #   if lightCount > 0:
-        #     lightCount = darkCount = 0
-        #   darkCount += 1
-        #   if darkCount >= SMOOTHING_LEVEL:
-        #     if ctrl.closeBlinds():
-        #       # Wait for 5 minutes here before moving on
-        #       # after a state change
-        #       ctrl.logMsg( ctrl.logFileName, "Sleeping for 5 mins." )
-        #       sleep( 300 )
-        #       ctrl.logMsg( ctrl.logFileName, "Resuming operation." )
-        # sleep( READ_SENSOR_SECONDS )
+        # I don't need to see log messages all night long when it is
+        # dark out anyway, so I am going to put the system to sleep
+        # for a period at night  Just approximately check for when
+        # it is time for bed, and then sleep for an interval until morning.
+        if ( datetime.datetime.now().hour == BEDTIME_HOUR ):
+          deepSleep( TEN_HOURS_IN_SECS )
+
     except:
       ctrl.logMsg( ctrl.logFileName, "Exiting system" )
       GPIO.cleanup() # ensures a clean exit
