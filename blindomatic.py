@@ -19,10 +19,20 @@ BEDTIME_HOUR = 21
 # Number of seconds in 10 hours used to put system to deep sleep.
 TEN_HOURS_IN_SECS = 3600
 
+# Photovoltaicsensor plugged into GPIO 4 on the Pi.
 PHOTO_INPUT = 4
+
 def evaluateLightLevel( period=OBSERVE_PERIOD ):
   numReadings = period/READ_SENSOR_SECONDS
   lightCount = darkCount = 0
+
+  tempFileName = '/tmp/lastLight.txt'
+  prevLightCount = 999999
+  if os.path.exists( tempFileName ):
+    filePtr = open( tempFileName, "r")
+    prevLightCount = filePtr.read().strip()
+    filePtr.close()
+
   while numReadings:
     lightData=GPIO.input(PHOTO_INPUT)
     if lightData:
@@ -32,12 +42,19 @@ def evaluateLightLevel( period=OBSERVE_PERIOD ):
     numReadings -= 1
     sleep(READ_SENSOR_SECONDS)
 
+  # Record this light count for comparison next time
+  filePtr = open( tempFileName, "w")
+  filePtr.write( "%d\n" % lightCount )
+  filePtr.close()
+  
   #Take our counted data and determine what state we should be in
   if darkCount > 0:
     ratio = lightCount / float( darkCount)
   else:
     # if darkCount is 0, then we absolutely need to close the blinds
-    ctrl.logMsg(ctrl.logFileName, "Only light reading - no ratio available")
+    if lightCount != int(prevLightCount):
+      logMessage = ( "light: %d dark: %d, Ratio undefined." %
+                     (lightCount, darkCount))
     return ctrl.closedState
 
   # Use the ratio for hysteresis
@@ -45,9 +62,11 @@ def evaluateLightLevel( period=OBSERVE_PERIOD ):
   # Any value greater than 2 means that numerator (lightCount) is decidedly
   # more so return closed state.
   # Values between 0.5 to 1.5 are too close to call, return unknown state
-  logMessage = ( "light: %d dark: %d, Ratio was %f" %
-                 (lightCount, darkCount, ratio))
-  ctrl.logMsg(ctrl.logFileName, logMessage)
+  if lightCount != int(prevLightCount):
+    logMessage = ( "light: %d dark: %d, Ratio was %f" %
+                   (lightCount, darkCount, ratio))
+    ctrl.logMsg(ctrl.logFileName, logMessage)
+
   if ratio <= 0.5:
     return ctrl.openState
   if ratio >= 1.5:
@@ -113,7 +132,7 @@ def main(argv):
         elif decision == ctrl.closedState:
           ctrl.closeBlinds()
         elif decision == ctrl.unknownState:
-          ctrl.logMsg( ctrl.logFileName, "Unknown blind state. Doing nothing" )
+          ctrl.logMsg( ctrl.logFileName, "Inconclusive light data. Doing nothing" )
 
         # I don't need to see log messages all night long when it is
         # dark out anyway, so I am going to put the system to sleep
