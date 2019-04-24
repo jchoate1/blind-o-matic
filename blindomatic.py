@@ -17,7 +17,7 @@ SMOOTHING_LEVEL = 5
 # Time at night (hour) to put system to deep sleep for the night
 BEDTIME_HOUR = 21
 # Number of seconds in 10 hours used to put system to deep sleep.
-TEN_HOURS_IN_SECS = 3600
+TEN_HOURS_IN_SECS = 36000
 
 # Photovoltaicsensor plugged into GPIO 4 on the Pi.
 PHOTO_INPUT = 4
