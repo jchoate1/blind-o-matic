@@ -22,6 +22,10 @@ TEN_HOURS_IN_SECS = 36000
 # Photovoltaicsensor plugged into GPIO 4 on the Pi.
 PHOTO_INPUT = 4
 
+trendLen=3
+trendLine=[ ctrl.unknownState, ctrl.unknownState, ctrl.unknownState ]
+trendCount=0
+
 def evaluateLightLevel( period=OBSERVE_PERIOD ):
   numReadings = period/READ_SENSOR_SECONDS
   lightCount = darkCount = 0
@@ -79,6 +83,14 @@ def deepSleep( interval=TEN_HOURS_IN_SECS ):
   sleep( interval )
   ctrl.logMsg( ctrl.logFileName, "Waking up and resuming operation." )
 
+def checkTrend( curState ):
+  global trendLine, trendCount
+  trendLine[trendCount] = curState
+  trendCount = ( trendCount + 1 ) % trendLen
+  if all( elem == trendLine[0] for elem in trendLine):
+    return True
+  return False
+
 def main(argv):
   desiredAction=''
   try:
@@ -128,10 +140,13 @@ def main(argv):
       while True:
         decision = evaluateLightLevel()
         if decision == ctrl.openState:
-          ctrl.openBlinds()
+          if checkTrend( ctrl.openState ):
+            ctrl.openBlinds()
         elif decision == ctrl.closedState:
-          ctrl.closeBlinds()
+          if checkTrend( ctrl.closedState ):
+            ctrl.closeBlinds()
         elif decision == ctrl.unknownState:
+          checkTrend( ctrl.unknownState )
           ctrl.logMsg( ctrl.logFileName, "Inconclusive light data. Doing nothing" )
 
         # I don't need to see log messages all night long when it is
