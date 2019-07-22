@@ -12,7 +12,8 @@ IN4_BMINUS = 19
 
 SPR = 50
 step_count=SPR
-STEP_DELAY=0.0052
+#STEP_DELAY=0.0052
+STEP_DELAY=0.0026
 
 ROTATIONS_PER_CYCLE = 8
 
@@ -30,8 +31,21 @@ def setupGPIO():
   GPIO.setup(IN3_BPLUS, GPIO.OUT)
   GPIO.setup(IN4_BMINUS, GPIO.OUT)  
 
+def resetControl():  
+  logMessage = "Resetting the GPIO state (set all to low)"
+  print logMessage + ' at ' + str(datetime.datetime.now())
+  logMsg( logFileName, logMessage )
+  setupGPIO()
+  GPIO.output(IN1_APLUS, GPIO.LOW)
+  GPIO.output(IN2_AMINUS, GPIO.LOW)
+  GPIO.output(IN3_BPLUS, GPIO.LOW)
+  GPIO.output(IN4_BMINUS, GPIO.LOW)
+  sleep(STEP_DELAY)
+  return True
+
 def clockwiseTurn(numberOfTurns):  
   setupGPIO()
+  sleep(STEP_DELAY)
   for iteration in range(0, numberOfTurns):
     for x in range( step_count):
       GPIO.output(IN1_APLUS, GPIO.LOW)

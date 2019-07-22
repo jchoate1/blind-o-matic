@@ -94,13 +94,13 @@ def checkTrend( curState ):
 def main(argv):
   desiredAction=''
   try:
-    opts, args = getopt.getopt(argv,"hsa",["action=","state="])
+    opts, args = getopt.getopt(argv,"a:hs",["action=","state="])
   except getopt.GetOptError:
-    print 'blindomatic.py [-a (open, close, auto)] [-s state (OPEN, CLOSED)]'
+    print 'blindomatic.py -a (open, close, auto, reset) [-s state (OPEN, CLOSED)]'
     sys.exit(2)
   for opt,arg in opts:
     if opt == '-h':
-      print 'blindomatic.py [-a (open, close, auto)] [-s state (OPEN, CLOSED)]'
+      print 'blindomatic.py [-a (open, close, auto, reset)] [-s state (OPEN, CLOSED)]'
       sys.exit()
     elif opt in ( "-a", "--action"):
       desiredAction = arg
@@ -165,6 +165,8 @@ def main(argv):
     ctrl.openBlinds()
   if (desiredAction in ['close','CLOSE','CLOSED','closed']):
     ctrl.closeBlinds()
+  if (desiredAction in ['reset','RESET']):
+    ctrl.resetControl()
 
   GPIO.cleanup() # ensures a clean exit
 
