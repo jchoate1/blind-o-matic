@@ -1,20 +1,29 @@
 #!/usr/bin/python
+# This is a library for the automatic blind control program.
 
 import RPi.GPIO as GPIO
 import sys, os, getopt
 import datetime
 from time import sleep
 
+# GPIO Pins from the H-bridge go to these Pi pins
 IN1_APLUS = 5
 IN2_AMINUS = 6
 IN3_BPLUS = 13
 IN4_BMINUS = 19
+# Photovoltaicsensor plugged into GPIO 4 on the Pi.
+PHOTO_INPUT = 4
 
+#Steps per revolution for the stepper motor we have
 SPR = 50
 step_count=SPR
-#STEP_DELAY=0.0052
+# Delay is required between activation of next step. Time is in seconds.
+# STEP_DELAY=0.0052
 STEP_DELAY=0.0026
 
+# Empirically determined that 8 revolutions of the motor are
+# required to either close or open the blinds from the opposite
+# setting (closed -> open, etc)
 ROTATIONS_PER_CYCLE = 8
 
 # The stepper motor will put each of its 4 poles through a complete phase
@@ -33,6 +42,7 @@ closedState = "CLOSED"
 openState = "OPEN"
 unknownState = "UNKNOWN"
 
+## Photo sensor setup stuff
 # Number of seconds between each reading of photo sensor
 READ_SENSOR_SECONDS = 3
 # Number of seconds to gather data to make a decision
@@ -45,28 +55,28 @@ BEDTIME_HOUR = 21
 # Number of seconds in 10 hours used to put system to deep sleep.
 TEN_HOURS_IN_SECS = 36000
 
-# Photovoltaicsensor plugged into GPIO 4 on the Pi.
-PHOTO_INPUT = 4
-
 #initialize trends to a basic unknown state
 trendLen=3
 trendLine=[ unknownState, unknownState, unknownState ]
 trendCount=0
 
-
 def logMsg( logFile, logMessage ):
-    logFilePtr = open( logFile, 'a' )
-    logLine =  str(datetime.datetime.now()) + ' : ' + logMessage + '\n' 
-    logFilePtr.write( logLine )
-    logFilePtr.close
+  # Facility for creating system logging messages
+  logFilePtr = open( logFile, 'a' )
+  logLine =  str(datetime.datetime.now()) + ' : ' + logMessage + '\n' 
+  logFilePtr.write( logLine )
+  logFilePtr.close
   
 def deepSleep( interval=TEN_HOURS_IN_SECS ):
+  # A very long sleep routine designed to pause the system overnight.
   logMessage = "Going to sleep for the night. See you in the morning!"
   logMsg( logFileName, logMessage )
   sleep( interval )
   logMsg( logFileName, "Waking up and resuming operation." )
 
 def setupGPIO():
+  # GPIO pins are setup on the Pi so that they are output only.
+  # We supress warnings to deal with concurrent use (asynchronous).
   GPIO.setmode(GPIO.BCM)
   GPIO.setwarnings(False)
   GPIO.setup(IN1_APLUS, GPIO.OUT)
@@ -74,7 +84,9 @@ def setupGPIO():
   GPIO.setup(IN3_BPLUS, GPIO.OUT)
   GPIO.setup(IN4_BMINUS, GPIO.OUT)  
 
-def resetControl():  
+def resetControl():
+  # This function is used to get all of the pns back to a low state so
+  # the stepper motor will never get constantly driven or locked up.
   setupGPIO()
   GPIO.output(IN1_APLUS, GPIO.LOW)
   GPIO.output(IN2_AMINUS, GPIO.LOW)
@@ -118,6 +130,12 @@ def counterClockwiseTurn(numberOfTurns):
   resetControl()
 
 def getBlindState( stateFileName ):
+  # Read and return our central blind state file.  If there is no
+  # blind state file, we cannot continue, so alert the user and
+  # get out.  If we tried to close the closed blinds, or open the
+  # open blinds, we could damage the walls, blinds, system, or
+  # any combination thereof.  So we need to get a state before we
+  # can begin.
   if not os.path.exists( stateFileName ):
     print "There is no state file, so I don't know the current"
     print "state of the blinds.  Please set the current state and"
@@ -141,11 +159,17 @@ def getBlindState( stateFileName ):
   return currentState
 
 def setBlindState( stateFileName, state ):
+  # Write the state of the blinds to a well known file so
+  # everything stays coordinated.
   filePtr = open( stateFileName, "w")
   filePtr.write( state + "\n")
   filePtr.close()
 
 def openBlinds():
+  # The action function that will perform and log the action
+  # of opening the blinds.  If the blinds are already open,
+  # no action is taken.  The function returns True if an action
+  # was taken, and false otherwise.
   if (getBlindState(blindStateFile) == closedState):
     logMessage = "Opening the blinds"
     print logMessage + ' at ' + str(datetime.datetime.now())
@@ -161,6 +185,10 @@ def openBlinds():
   return False
 
 def closeBlinds():
+  # The action function that will perform and log the action
+  # of closing the blinds.  If the blinds are already closed,
+  # no action is taken.  The function returns True if an action
+  # was taken, and false otherwise.
   if (getBlindState(blindStateFile) == openState):
     logMessage = "Closing the blinds"
     print logMessage + ' at ' + str(datetime.datetime.now())
@@ -176,6 +204,9 @@ def closeBlinds():
   return False
 
 def checkTrend( curState ):
+  # An attempt at hysteresis. See whether our last several measurements
+  # agree with the current measurement.  Only if we see a trend develop,
+  # should we actually take action.
   global trendLine, trendCount
   trendLine[trendCount] = curState
   trendCount = ( trendCount + 1 ) % trendLen
@@ -184,6 +215,17 @@ def checkTrend( curState ):
   return False
 
 def evaluateLightLevel( period=OBSERVE_PERIOD ):
+  # This function collects the light levels using a photovoltaic
+  # sensor attached to the GPIO pins.  It takes a reading at given
+  # intervals for a period specified by the caller.  Because we are
+  # using GPIO, readings are binary.  2 counters are maintained to hold
+  # the number of readings classified as "dark", and "light"
+  # Once all readings in the period are gathered, the ratio between light
+  # and dark levels is computed, and we return what we believe the state of
+  # the blinds should be based on the ratio (open for dark out,
+  # closed for light out).
+  # Probably there is a better way to deal with the readings for more accurate
+  # hysteresis.
   numReadings = period/READ_SENSOR_SECONDS
   lightCount = darkCount = 0
 
@@ -235,8 +277,15 @@ def evaluateLightLevel( period=OBSERVE_PERIOD ):
   return unknownState
 
 def autoBlinds():
+  # This is the driver function that will be called when the user wants
+  # automatic operation.  This function starts and runs endlessly gathering
+  # the light levels at given intervals and takes the approproiate actions
+  # along the way.
+
+  #Set up the photo sensor as an input to the machine
   GPIO.setmode(GPIO.BCM)
   GPIO.setup(PHOTO_INPUT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+  
   print"Running in automatic mode using photo sensor as control"
   logMessage = ("%s started" % ( sys.argv[0] ) )
   logMsg( logFileName, logMessage )
@@ -261,7 +310,8 @@ def autoBlinds():
     logMsg( logFileName, "Error reading initial light data." )
     GPIO.cleanup() # ensures a clean exit
     sys.exit(2)
-    
+
+  #This is the main loop - do this forever.
   try:
     while True:
       decision = evaluateLightLevel()
@@ -283,6 +333,8 @@ def autoBlinds():
         deepSleep( TEN_HOURS_IN_SECS )
 
   except:
+    # In an exception or quit, we log a message and then cleanup the
+    # GPIO signals and finally just exit.
     logMsg( logFileName, "Error controling blinds. Exiting system." )
     GPIO.cleanup() # ensures a clean exit
     sys.exit(2)

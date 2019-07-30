@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# Rudimentary web interface to the blinds control programs.
 
 from time import sleep
 import blindControl as ctrl

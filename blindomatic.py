@@ -1,4 +1,7 @@
 #!/usr/bin/python
+# A program used to control the blinds using either CLI to manually open
+# or close the blinds, or an automatic mode that will watch the light
+# levels and take the appropriate actions automatically.
 
 import blindControl as ctrl
 from time import sleep
