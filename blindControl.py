@@ -46,7 +46,7 @@ trendCount=0
 
 def setupGPIO():
   GPIO.setmode(GPIO.BCM)
-
+  GPIO.setwarnings(False)
   GPIO.setup(IN1_APLUS, GPIO.OUT)
   GPIO.setup(IN2_AMINUS, GPIO.OUT)
   GPIO.setup(IN3_BPLUS, GPIO.OUT)
@@ -252,13 +252,18 @@ def autoBlinds():
 
   # Do an initial reading to start with. A sigle reading is good for this
   try:
+    firstState = unknownState
     lightData=GPIO.input(PHOTO_INPUT)
     if lightData:
       print("Sensor detected initial state of blinds should be OPEN.")
+      firstState=openState
       openBlinds()
     else:
       print("Sensor detected initial state of blinds should be CLOSED.")
+      firstState=closedState
       closeBlinds()
+    for i in range(trendLen):
+      trendLine[i]=firstState
   except:
     logMsg( logFileName, "Error reading initial light data." )
     GPIO.cleanup() # ensures a clean exit
