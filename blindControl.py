@@ -17,6 +17,16 @@ STEP_DELAY=0.0026
 
 ROTATIONS_PER_CYCLE = 8
 
+# The stepper motor will put each of its 4 poles through a complete phase
+# angle cycle.  This dict represents the phases we will induce for a rotation.
+# We start high, hold for half the cycle and then go low.
+phaseAngles={
+  0:GPIO.HIGH,
+  1:GPIO.HIGH,
+  2:GPIO.LOW,
+  3:GPIO.LOW,
+}
+
 blindStateFile = "currentBlindState.txt"
 logFileName = "blindomatic.log"
 closedState = "CLOSED"
@@ -75,55 +85,36 @@ def resetControl():
 
 def clockwiseTurn(numberOfTurns):  
   setupGPIO()
-  sleep(STEP_DELAY)
+  # We will run each pin of the bridge through a complete
+  # phase, where the B pins are at a 90 degree offset from
+  # the A pins. We use our phaseAngle dict and traverse it
+  # 4 times for each step through the phase of a turn,
+  # and we then do that for the number of turns we have
   for iteration in range(0, numberOfTurns):
-    for x in range( step_count):
-      GPIO.output(IN1_APLUS, GPIO.LOW)
-      GPIO.output(IN2_AMINUS, GPIO.HIGH)
-      GPIO.output(IN3_BPLUS, GPIO.HIGH)
-      GPIO.output(IN4_BMINUS, GPIO.LOW)
-      sleep(STEP_DELAY)
-      GPIO.output(IN1_APLUS, GPIO.LOW)
-      GPIO.output(IN2_AMINUS, GPIO.HIGH)
-      GPIO.output(IN3_BPLUS, GPIO.LOW)
-      GPIO.output(IN4_BMINUS, GPIO.HIGH)
-      sleep(STEP_DELAY)
-      GPIO.output(IN1_APLUS, GPIO.HIGH)
-      GPIO.output(IN2_AMINUS, GPIO.LOW)
-      GPIO.output(IN3_BPLUS, GPIO.LOW)
-      GPIO.output(IN4_BMINUS, GPIO.HIGH)
-      sleep(STEP_DELAY)
-      GPIO.output(IN1_APLUS, GPIO.HIGH)
-      GPIO.output(IN2_AMINUS, GPIO.LOW)
-      GPIO.output(IN3_BPLUS, GPIO.HIGH)
-      GPIO.output(IN4_BMINUS, GPIO.LOW)
-      sleep(STEP_DELAY)
+    for x in range( step_count ):
+      for phase in range(4):
+        GPIO.output(IN1_APLUS, phaseAngles[(phase+3)%4])
+        GPIO.output(IN2_AMINUS, phaseAngles[(phase+1)%4])
+        GPIO.output(IN3_BPLUS, phaseAngles[(phase+2)%4])
+        GPIO.output(IN4_BMINUS, phaseAngles[(phase)%4])
+        sleep(STEP_DELAY)
   resetControl()
   
 def counterClockwiseTurn(numberOfTurns):  
   setupGPIO()
+  # We will run each pin of the bridge through a complete
+  # phase, where the B pins are at a 90 degree offset from
+  # the A pins. We use our phaseAngle dict and traverse it
+  # 4 times for each step through the phase of a turn,
+  # and we then do that for the number of turns we have
   for iteration in range(0, numberOfTurns):
-    for x in range( step_count):
-      GPIO.output(IN1_APLUS, GPIO.HIGH)
-      GPIO.output(IN2_AMINUS, GPIO.LOW)
-      GPIO.output(IN3_BPLUS, GPIO.HIGH)
-      GPIO.output(IN4_BMINUS, GPIO.LOW)
-      sleep(STEP_DELAY)
-      GPIO.output(IN1_APLUS, GPIO.HIGH)
-      GPIO.output(IN2_AMINUS, GPIO.LOW)
-      GPIO.output(IN3_BPLUS, GPIO.LOW)
-      GPIO.output(IN4_BMINUS, GPIO.HIGH)
-      sleep(STEP_DELAY)
-      GPIO.output(IN1_APLUS, GPIO.LOW)
-      GPIO.output(IN2_AMINUS, GPIO.HIGH)
-      GPIO.output(IN3_BPLUS, GPIO.LOW)
-      GPIO.output(IN4_BMINUS, GPIO.HIGH)
-      sleep(STEP_DELAY)
-      GPIO.output(IN1_APLUS, GPIO.LOW)
-      GPIO.output(IN2_AMINUS, GPIO.HIGH)
-      GPIO.output(IN3_BPLUS, GPIO.HIGH)
-      GPIO.output(IN4_BMINUS, GPIO.LOW)
-      sleep(STEP_DELAY)
+    for x in range( step_count ):
+      for phase in range(4):
+        GPIO.output(IN1_APLUS, phaseAngles[(phase)%4])
+        GPIO.output(IN2_AMINUS, phaseAngles[(phase+2)%4])
+        GPIO.output(IN3_BPLUS, phaseAngles[(phase+1)%4])
+        GPIO.output(IN4_BMINUS, phaseAngles[(phase+3)%4])
+        sleep(STEP_DELAY)
   resetControl()
 
 def getBlindState( stateFileName ):
@@ -137,8 +128,10 @@ def getBlindState( stateFileName ):
   filePtr = open( stateFileName, "r")
   currentState = filePtr.read().strip()
   filePtr.close()
-  if currentState == unknownState:
-    print "I don't know the current state of the blinds."
+  # We need to know that the blinds are either opened or closed currently
+  # otherwise we have a problem controlling them.
+  if not (currentState == openState) and not (currentState == closedState) :
+    print "ERROR - State of the blinds is not known."
     print "This could lead to potential damage of the blinds"
     print "or the driver system.  Therefore we cannot continue."
     print "Please set the current state and try again."
