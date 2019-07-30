@@ -44,6 +44,18 @@ trendLine=[ unknownState, unknownState, unknownState ]
 trendCount=0
 
 
+def logMsg( logFile, logMessage ):
+    logFilePtr = open( logFile, 'a' )
+    logLine =  str(datetime.datetime.now()) + ' : ' + logMessage + '\n' 
+    logFilePtr.write( logLine )
+    logFilePtr.close
+  
+def deepSleep( interval=TEN_HOURS_IN_SECS ):
+  logMessage = "Going to sleep for the night. See you in the morning!"
+  logMsg( logFileName, logMessage )
+  sleep( interval )
+  logMsg( logFileName, "Waking up and resuming operation." )
+
 def setupGPIO():
   GPIO.setmode(GPIO.BCM)
   GPIO.setwarnings(False)
@@ -140,12 +152,6 @@ def setBlindState( stateFileName, state ):
   filePtr.write( state + "\n")
   filePtr.close()
 
-def logMsg( logFile, logMessage ):
-    logFilePtr = open( logFile, 'a' )
-    logLine =  str(datetime.datetime.now()) + ' : ' + logMessage + '\n' 
-    logFilePtr.write( logLine )
-    logFilePtr.close
-  
 def openBlinds():
   if (getBlindState(blindStateFile) == closedState):
     logMessage = "Opening the blinds"
@@ -174,6 +180,14 @@ def closeBlinds():
       logMsg( logFileName, "Error opening blinds." )
       #Make sure we clean up the possibly bad state of the pins.
       resetControl()
+  return False
+
+def checkTrend( curState ):
+  global trendLine, trendCount
+  trendLine[trendCount] = curState
+  trendCount = ( trendCount + 1 ) % trendLen
+  if all( elem == trendLine[0] for elem in trendLine):
+    return True
   return False
 
 def evaluateLightLevel( period=OBSERVE_PERIOD ):
@@ -226,20 +240,6 @@ def evaluateLightLevel( period=OBSERVE_PERIOD ):
   if ratio >= 1.5:
     return closedState
   return unknownState
-
-def deepSleep( interval=TEN_HOURS_IN_SECS ):
-  logMessage = "Going to sleep for the night. See you in the morning!"
-  logMsg( logFileName, logMessage )
-  sleep( interval )
-  logMsg( logFileName, "Waking up and resuming operation." )
-
-def checkTrend( curState ):
-  global trendLine, trendCount
-  trendLine[trendCount] = curState
-  trendCount = ( trendCount + 1 ) % trendLen
-  if all( elem == trendLine[0] for elem in trendLine):
-    return True
-  return False
 
 def autoBlinds():
   GPIO.setmode(GPIO.BCM)
