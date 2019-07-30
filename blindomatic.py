@@ -7,92 +7,23 @@ import sys, os, getopt
 import datetime
 import pdb
 
-# Number of seconds between each reading of photo sensor
-READ_SENSOR_SECONDS = 3
-# Number of seconds to gather data to make a decision
-OBSERVE_PERIOD = 300
-# Adding hysteresis - must get this many consistent readings
-# in a row before an action is taken
-SMOOTHING_LEVEL = 5
-# Time at night (hour) to put system to deep sleep for the night
-BEDTIME_HOUR = 21
-# Number of seconds in 10 hours used to put system to deep sleep.
-TEN_HOURS_IN_SECS = 36000
-
-# Photovoltaicsensor plugged into GPIO 4 on the Pi.
-PHOTO_INPUT = 4
-
-trendLen=3
-trendLine=[ ctrl.unknownState, ctrl.unknownState, ctrl.unknownState ]
-trendCount=0
-
-def evaluateLightLevel( period=OBSERVE_PERIOD ):
-  numReadings = period/READ_SENSOR_SECONDS
-  lightCount = darkCount = 0
-
-  tempFileName = '/tmp/lastLight.txt'
-  prevLightCount = 999999
-  if os.path.exists( tempFileName ):
-    filePtr = open( tempFileName, "r")
-    prevLightCount = filePtr.read().strip()
-    filePtr.close()
-
-  while numReadings:
-    lightData=GPIO.input(PHOTO_INPUT)
-    if lightData:
-      darkCount += 1
-    else:
-      lightCount += 1
-    numReadings -= 1
-    sleep(READ_SENSOR_SECONDS)
-
-  # Record this light count for comparison next time
-  filePtr = open( tempFileName, "w")
-  filePtr.write( "%d\n" % lightCount )
-  filePtr.close()
-  
-  #Take our counted data and determine what state we should be in
-  if darkCount > 0:
-    ratio = lightCount / float( darkCount)
-  else:
-    # if darkCount is 0, then we absolutely need to close the blinds
-    if lightCount != int(prevLightCount):
-      logMessage = ( "light: %d dark: %d, Ratio undefined." %
-                     (lightCount, darkCount))
-    return ctrl.closedState
-
-  # Use the ratio for hysteresis
-  # 0 - 0.5 ratio means darkCount is decidedly more, return open state
-  # Any value greater than 2 means that numerator (lightCount) is decidedly
-  # more so return closed state.
-  # Values between 0.5 to 1.5 are too close to call, return unknown state
-  if lightCount != int(prevLightCount):
-    logMessage = ( "light: %d dark: %d, Ratio was %f" %
-                   (lightCount, darkCount, ratio))
-    ctrl.logMsg(ctrl.logFileName, logMessage)
-
-  if ratio <= 0.5:
-    return ctrl.openState
-  if ratio >= 1.5:
-    return ctrl.closedState
-  return ctrl.unknownState
-
-def deepSleep( interval=TEN_HOURS_IN_SECS ):
-  logMessage = "Going to sleep for the night. See you in the morning!"
-  ctrl.logMsg( ctrl.logFileName, logMessage )
-  sleep( interval )
-  ctrl.logMsg( ctrl.logFileName, "Waking up and resuming operation." )
-
-def checkTrend( curState ):
-  global trendLine, trendCount
-  trendLine[trendCount] = curState
-  trendCount = ( trendCount + 1 ) % trendLen
-  if all( elem == trendLine[0] for elem in trendLine):
-    return True
-  return False
 
 def main(argv):
-  desiredAction=''
+
+  # Make a mapping of possible user requested states to the
+  # corresponding action that should be called for the action
+  functionMap={}
+  actionMap={
+    ('auto','AUTO','automatic', 'AUTOMATIC') : ctrl.autoBlinds,
+    ('open','OPEN','opened', 'OPENED') : ctrl.openBlinds,
+    ('close','CLOSE','CLOSED','closed') : ctrl.closeBlinds,
+    ('reset','RESET') : ctrl.resetControl,
+    }
+  for strings, fun in actionMap.items():
+    for key in strings:
+      functionMap[ key ] = fun
+
+  # process command line arguments    
   try:
     opts, args = getopt.getopt(argv,"a:hs",["action=","state="])
   except getopt.GetOptError:
@@ -103,7 +34,11 @@ def main(argv):
       print 'blindomatic.py [-a (open, close, auto, reset)] [-s state (OPEN, CLOSED)]'
       sys.exit()
     elif opt in ( "-a", "--action"):
-      desiredAction = arg
+      if not arg in functionMap:
+        print 'blindomatic.py [-a (open, close, auto, reset)] [-s state (OPEN, CLOSED)]'
+        sys.exit()
+      else:
+        desiredAction = functionMap[arg]
     elif opt in ("-s", "--state"):
       filePtr = open( ctrl.blindStateFile, "w")
       if (arg in ['OPEN', 'open', 'OPENED', 'opened']):
@@ -117,58 +52,10 @@ def main(argv):
 
   # Make sure we have the current state of blinds before we do something.
   initialState = ctrl.getBlindState(ctrl.blindStateFile)
-  if (desiredAction in ['auto','AUTO','automatic', 'AUTOMATIC']):
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(PHOTO_INPUT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-    print"Running in automatic mode using photo sensor as control"
-    logMessage = ("%s started" % ( sys.argv[0] ) )
-    ctrl.logMsg( ctrl.logFileName, logMessage )
-                     
-    lightCount = darkCount = 0
-    ctrl.setupGPIO()
 
-    # Do an initial reading to start with. A sigle reading is good for this
-    lightData=GPIO.input(PHOTO_INPUT)
-    if lightData:
-      print("Sensor detected initial state of blinds should be OPEN.")
-      ctrl.openBlinds()
-    else:
-      print("Sensor detected initial state of blinds should be CLOSED.")
-      ctrl.closeBlinds()
-
-    try:
-      while True:
-        decision = evaluateLightLevel()
-        if decision == ctrl.openState:
-          if checkTrend( ctrl.openState ):
-            ctrl.openBlinds()
-        elif decision == ctrl.closedState:
-          if checkTrend( ctrl.closedState ):
-            ctrl.closeBlinds()
-        elif decision == ctrl.unknownState:
-          checkTrend( ctrl.unknownState )
-          ctrl.logMsg( ctrl.logFileName, "Inconclusive light data. Doing nothing" )
-
-        # I don't need to see log messages all night long when it is
-        # dark out anyway, so I am going to put the system to sleep
-        # for a period at night  Just approximately check for when
-        # it is time for bed, and then sleep for an interval until morning.
-        if ( datetime.datetime.now().hour == BEDTIME_HOUR ):
-          deepSleep( TEN_HOURS_IN_SECS )
-
-    except:
-      ctrl.logMsg( ctrl.logFileName, "Exiting system" )
-      GPIO.cleanup() # ensures a clean exit
-      sys.exit(2)
-      
-  if (desiredAction in ['open','OPEN','opened', 'OPENED']):
-    ctrl.openBlinds()
-  if (desiredAction in ['close','CLOSE','CLOSED','closed']):
-    ctrl.closeBlinds()
-  if (desiredAction in ['reset','RESET']):
-    ctrl.resetControl()
-
-  GPIO.cleanup() # ensures a clean exit
+  # Do the task that the user wanted, cleanup afterwards if approproiate.
+  if desiredAction():
+    GPIO.cleanup() # ensures a clean exit
 
 if __name__ == "__main__":
   main(sys.argv[1:])
