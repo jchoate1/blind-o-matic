@@ -1,11 +1,14 @@
 #!/usr/bin/python
 
-# Quick test program to play with the light sensor.
-
 from time import sleep
 import RPi.GPIO as GPIO
 import sys, getopt
 import pdb
+
+'''
+Quick test program to play with the light sensor.
+--NOT USED IN FINAL SYSTEM--
+'''
 
 PHOTO_INPUT = 4
 

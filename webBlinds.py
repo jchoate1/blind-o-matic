@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# Rudimentary web interface to the blinds control programs.
 
 from time import sleep
 import blindControl as ctrl
@@ -8,6 +7,11 @@ import sys, getopt
 import pdb
 from flask import Flask, render_template
 
+'''
+Quick Flask application to create a very basic web page used to control the 
+blinds from a web API.  This can be enhanced later, but this is just for
+a proof of concept.  It works well enough, but is not at all polished!
+'''
 app = Flask(__name__)
 
 @app.route('/')
