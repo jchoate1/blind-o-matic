@@ -322,7 +322,8 @@ def autoBlinds():
         if checkTrend( closedState ):
           closeBlinds()
       elif decision == unknownState:
-        checkTrend( unknownState )
+        # Inconclusive state should not modify or affect the current
+        # trend, so we don't make any move when the data is inconclusive.
         logMsg( logFileName, "Inconclusive light data. Doing nothing" )
 
       # I don't need to see log messages all night long when it is
