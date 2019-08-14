@@ -1,5 +1,10 @@
 #!/usr/bin/python
-# This is a library for the automatic blind control program.
+'''
+This is a library for the automatic blind control program.  This library 
+contains all of the functions that are necessary to drive the stepper motor to 
+produce the desired results.  It also contains routines for reading and 
+judging the current light level from a separate photovoltaic sensor.
+'''
 
 import RPi.GPIO as GPIO
 import sys, os, getopt
@@ -16,7 +21,7 @@ PHOTO_INPUT = 4
 
 #Steps per revolution for the stepper motor we have
 SPR = 50
-step_count=SPR
+STEP_COUNT=SPR
 # Delay is required between activation of next step. Time is in seconds.
 # STEP_DELAY=0.0052
 STEP_DELAY=0.0026
@@ -42,7 +47,7 @@ closedState = "CLOSED"
 openState = "OPEN"
 unknownState = "UNKNOWN"
 
-## Photo sensor setup stuff
+## Photo sensor setup values
 # Number of seconds between each reading of photo sensor
 READ_SENSOR_SECONDS = 3
 # Number of seconds to gather data to make a decision
@@ -61,22 +66,30 @@ trendLine=[ unknownState, unknownState, unknownState ]
 trendCount=0
 
 def logMsg( logFile, logMessage ):
-  # Facility for creating system logging messages
+  '''
+  Facility for creating system logging messages
+  '''
   logFilePtr = open( logFile, 'a' )
   logLine =  str(datetime.datetime.now()) + ' : ' + logMessage + '\n' 
   logFilePtr.write( logLine )
   logFilePtr.close
   
 def deepSleep( interval=TEN_HOURS_IN_SECS ):
-  # A very long sleep routine designed to pause the system overnight.
+  '''
+  A very long sleep routine designed to pause the system overnight.  It 
+  doesn't needto be precise, it is only to sleep the system for interval number of 
+  seconds.  By default, it will return 10 hours after it is called.
+  '''
   logMessage = "Going to sleep for the night. See you in the morning!"
   logMsg( logFileName, logMessage )
   sleep( interval )
   logMsg( logFileName, "Waking up and resuming operation." )
 
 def setupGPIO():
-  # GPIO pins are setup on the Pi so that they are output only.
-  # We supress warnings to deal with concurrent use (asynchronous).
+  '''
+  GPIO pins are setup on the Pi so that they are output only.
+  We supress warnings to deal with concurrent use (asynchronous).
+  '''
   GPIO.setmode(GPIO.BCM)
   GPIO.setwarnings(False)
   GPIO.setup(IN1_APLUS, GPIO.OUT)
@@ -85,8 +98,10 @@ def setupGPIO():
   GPIO.setup(IN4_BMINUS, GPIO.OUT)  
 
 def resetControl():
-  # This function is used to get all of the pns back to a low state so
-  # the stepper motor will never get constantly driven or locked up.
+  '''
+  This function is used to get all of the pins back to a low state so
+  the stepper motor will never get constantly driven or locked up.
+  '''
   setupGPIO()
   GPIO.output(IN1_APLUS, GPIO.LOW)
   GPIO.output(IN2_AMINUS, GPIO.LOW)
@@ -97,13 +112,18 @@ def resetControl():
 
 def clockwiseTurn(numberOfTurns):  
   setupGPIO()
-  # We will run each pin of the bridge through a complete
-  # phase, where the B pins are at a 90 degree offset from
-  # the A pins. We use our phaseAngle dict and traverse it
-  # 4 times for each step through the phase of a turn,
-  # and we then do that for the number of turns we have
+  '''
+  Each pin of the bridge will run through a complete
+  phase, where the B pins are at a 90 degree offset from
+  the A pins. We use our phaseAngle dict and traverse it
+  4 times for each step through the phase of a turn,
+  and we then do that for the number of turns we have
+  passed in. By marching through the phases in a
+  specific order, we will rotate the rotor in a clockwise
+  direction.
+  '''
   for iteration in range(0, numberOfTurns):
-    for x in range( step_count ):
+    for x in range( STEP_COUNT ):
       for phase in range(4):
         GPIO.output(IN1_APLUS, phaseAngles[(phase+3)%4])
         GPIO.output(IN2_AMINUS, phaseAngles[(phase+1)%4])
@@ -114,13 +134,14 @@ def clockwiseTurn(numberOfTurns):
   
 def counterClockwiseTurn(numberOfTurns):  
   setupGPIO()
-  # We will run each pin of the bridge through a complete
-  # phase, where the B pins are at a 90 degree offset from
-  # the A pins. We use our phaseAngle dict and traverse it
-  # 4 times for each step through the phase of a turn,
-  # and we then do that for the number of turns we have
+  '''
+  This is the same function as above in clockwiseTurn().  
+  See that function for a description.  The only difference 
+  is that we march through the phase angles in the reverse order, 
+  thus rotating the rotor in a counter clockwise direction.
+  '''
   for iteration in range(0, numberOfTurns):
-    for x in range( step_count ):
+    for x in range( STEP_COUNT ):
       for phase in range(4):
         GPIO.output(IN1_APLUS, phaseAngles[(phase)%4])
         GPIO.output(IN2_AMINUS, phaseAngles[(phase+2)%4])
@@ -130,12 +151,14 @@ def counterClockwiseTurn(numberOfTurns):
   resetControl()
 
 def getBlindState( stateFileName ):
-  # Read and return our central blind state file.  If there is no
-  # blind state file, we cannot continue, so alert the user and
-  # get out.  If we tried to close the closed blinds, or open the
-  # open blinds, we could damage the walls, blinds, system, or
-  # any combination thereof.  So we need to get a state before we
-  # can begin.
+  '''
+  Read and return our central blind state file.  If there is no
+  blind state file, we cannot continue, so alert the user and
+  cause the system to exit immediately.  If we ever tried to close 
+  the closed blinds, or open the open blinds, we could damage the 
+  walls, blinds, system, or any combination thereof.  So we need 
+  to know the state of the blinds before we can begin.
+  '''
   if not os.path.exists( stateFileName ):
     print "There is no state file, so I don't know the current"
     print "state of the blinds.  Please set the current state and"
@@ -156,20 +179,27 @@ def getBlindState( stateFileName ):
     print "Set the state by using -s <STATE> (see help for details.)"
     logMsg( logFileName, "Unknown current blind state" )
     sys.exit(2)
+  # Assuming we successfully read the current blind state, return that to
+  # the caller.
   return currentState
 
 def setBlindState( stateFileName, state ):
-  # Write the state of the blinds to a well known file so
-  # everything stays coordinated.
+  '''
+  Write the state of the blinds to a well known file so everything stays coordinated.
+  '''
   filePtr = open( stateFileName, "w")
   filePtr.write( state + "\n")
   filePtr.close()
 
 def openBlinds():
-  # The action function that will perform and log the action
-  # of opening the blinds.  If the blinds are already open,
-  # no action is taken.  The function returns True if an action
-  # was taken, and false otherwise.
+  '''
+  The action function that will perform and log the action
+  of opening the blinds.  This function serves as an API to the
+  blinds control.  Users should simply call this function to affect
+  opening the blinds. If the blinds are already open,
+  no action is taken.  The function returns True if an action
+  was taken, and False otherwise.
+  '''
   if (getBlindState(blindStateFile) == closedState):
     logMessage = "Opening the blinds"
     print logMessage + ' at ' + str(datetime.datetime.now())
@@ -185,10 +215,14 @@ def openBlinds():
   return False
 
 def closeBlinds():
-  # The action function that will perform and log the action
-  # of closing the blinds.  If the blinds are already closed,
-  # no action is taken.  The function returns True if an action
-  # was taken, and false otherwise.
+  '''
+  The action function that will perform and log the action
+  of closing the blinds.  This function serves as an API to the
+  blinds control.  Users should simply call this function to affect
+  closing the blinds. If the blinds are already closed,
+  no action is taken.  The function returns True if an action
+  was taken, and False otherwise.
+  '''
   if (getBlindState(blindStateFile) == openState):
     logMessage = "Closing the blinds"
     print logMessage + ' at ' + str(datetime.datetime.now())
@@ -204,9 +238,11 @@ def closeBlinds():
   return False
 
 def checkTrend( curState ):
-  # An attempt at hysteresis. See whether our last several measurements
-  # agree with the current measurement.  Only if we see a trend develop,
-  # should we actually take action.
+  '''
+  An attempt at hysteresis. See whether our last several measurements
+  agree with the current measurement.  Only if we see a trend develop,
+  should we actually take action.
+  '''
   global trendLine, trendCount
   trendLine[trendCount] = curState
   trendCount = ( trendCount + 1 ) % trendLen
@@ -214,19 +250,22 @@ def checkTrend( curState ):
     return True
   return False
 
-def evaluateLightLevel( period=OBSERVE_PERIOD ):
-  # This function collects the light levels using a photovoltaic
-  # sensor attached to the GPIO pins.  It takes a reading at given
-  # intervals for a period specified by the caller.  Because we are
-  # using GPIO, readings are binary.  2 counters are maintained to hold
-  # the number of readings classified as "dark", and "light"
-  # Once all readings in the period are gathered, the ratio between light
-  # and dark levels is computed, and we return what we believe the state of
-  # the blinds should be based on the ratio (open for dark out,
-  # closed for light out).
-  # Probably there is a better way to deal with the readings for more accurate
-  # hysteresis.
-  numReadings = period/READ_SENSOR_SECONDS
+def evaluateLightLevel( period=OBSERVE_PERIOD, interval=READ_SENSOR_SECONDS ):
+  '''
+  This function collects the light levels using a photovoltaic
+  sensor attached to the GPIO pins for some given amount of time.  
+  It takes a reading at given intervals for a period specified by 
+  the caller.  Because we are using GPIO, readings are binary.  2 
+  counters are maintained to hold the number of readings classified 
+  as "dark", and "light".
+  Once all readings for a period are gathered, the ratio between light
+  and dark levels is computed, and we return what we believe the state of
+  the blinds should be based on this ratio (open for dark out,
+  closed for light out).
+  Probably there is a better way to deal with the readings for more accurate
+  hysteresis.
+  '''
+  numReadings = period/interval
   lightCount = darkCount = 0
 
   tempFileName = '/tmp/lastLight.txt'
@@ -243,7 +282,7 @@ def evaluateLightLevel( period=OBSERVE_PERIOD ):
     else:
       lightCount += 1
     numReadings -= 1
-    sleep(READ_SENSOR_SECONDS)
+    sleep( interval )
 
   # Record this light count for comparison next time
   filePtr = open( tempFileName, "w")
@@ -277,11 +316,14 @@ def evaluateLightLevel( period=OBSERVE_PERIOD ):
   return unknownState
 
 def autoBlinds():
-  # This is the driver function that will be called when the user wants
-  # automatic operation.  This function starts and runs endlessly gathering
-  # the light levels at given intervals and takes the approproiate actions
-  # along the way.
-
+  '''
+  This is an API to the blind control system that is called to automatically 
+  control the blinds.  This driver function that will be called when the user wants
+  automatic operation.  One called, the function runs and will not return unless an
+  error is encountered, or the program is terminated. It simply loops gathering
+  the light levels at given intervals and takes the approproiate actions
+  along the way.
+  '''
   #Set up the photo sensor as an input to the machine
   GPIO.setmode(GPIO.BCM)
   GPIO.setup(PHOTO_INPUT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)

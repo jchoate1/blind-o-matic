@@ -1,8 +1,4 @@
 #!/usr/bin/python
-# A program used to control the blinds using either CLI to manually open
-# or close the blinds, or an automatic mode that will watch the light
-# levels and take the appropriate actions automatically.
-
 import blindControl as ctrl
 from time import sleep
 import RPi.GPIO as GPIO
@@ -10,6 +6,12 @@ import sys, os, getopt
 import datetime
 import pdb
 
+'''
+A program used to control the blinds using either CLI to manually open
+or close the blinds, or an automatic mode that will watch the light
+levels and take the appropriate actions automatically.
+This is the main program that should be run by the user
+'''
 
 def main(argv):
 
@@ -27,6 +29,7 @@ def main(argv):
       functionMap[ key ] = fun
 
   # process command line arguments    
+  ## JAC-TODO - Should convert this to argparse instead of getopt.
   try:
     opts, args = getopt.getopt(argv,"a:hs",["action=","state="])
   except getopt.GetOptError:
@@ -41,6 +44,8 @@ def main(argv):
         print 'blindomatic.py [-a (open, close, auto, reset)] [-s state (OPEN, CLOSED)]'
         sys.exit()
       else:
+        # We map the action the user specifies on the command line to the proper
+        # function to call for that action.  Then we can just act on that.
         desiredAction = functionMap[arg]
     elif opt in ("-s", "--state"):
       filePtr = open( ctrl.blindStateFile, "w")
@@ -56,7 +61,7 @@ def main(argv):
   # Make sure we have the current state of blinds before we do something.
   initialState = ctrl.getBlindState(ctrl.blindStateFile)
 
-  # Do the task that the user wanted, cleanup afterwards if approproiate.
+  # Do the action that the user requested, cleanup afterwards if approproiate.
   if desiredAction():
     GPIO.cleanup() # ensures a clean exit
 
